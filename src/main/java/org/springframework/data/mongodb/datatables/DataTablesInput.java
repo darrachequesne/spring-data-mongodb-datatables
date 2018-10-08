@@ -15,7 +15,7 @@ import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toMap;
 
 @Data
-public final class DataTablesInput {
+public class DataTablesInput {
 
     /**
      * Draw counter. This is used by DataTables to ensure that the Ajax returns from server-side
