@@ -7,6 +7,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Document
@@ -18,7 +19,7 @@ class Product {
             .id(1)
             .label("product1")
             .isEnabled(true)
-            .createdAt(LocalDateTime.now())
+            .createdAt(truncateToMillis(LocalDateTime.now()))
             .characteristic(new Characteristic("key1", "val11"))
             .characteristic(new Characteristic("key2", "val21"))
             .build();
@@ -27,7 +28,7 @@ class Product {
             .id(2)
             .label("product2")
             .isEnabled(true)
-            .createdAt(LocalDateTime.now().plusHours(1))
+            .createdAt(truncateToMillis(LocalDateTime.now().plusHours(1)))
             .characteristic(new Characteristic("key1", "val12"))
             .build();
 
@@ -35,9 +36,20 @@ class Product {
             .id(3)
             .label("product3")
             .isEnabled(false)
-            .createdAt(LocalDateTime.now().minusHours(1))
+            .createdAt(truncateToMillis(LocalDateTime.now().minusHours(1)))
             .characteristic(new Characteristic("key2", "val23"))
             .build();
+
+    /**
+     * Since JDK 9, LocalDateTime uses a precision of nanoseconds, while the BSON dates in MongoDB have a millisecond
+     * precision, so we have to truncate it in order not to lose information.
+     *
+     * @see <a href="https://bugs.openjdk.java.net/browse/JDK-8068730">https://bugs.openjdk.java.net/browse/JDK-8068730</a>
+     * @see <a href="http://bsonspec.org/spec.html">http://bsonspec.org/spec.html</a>
+     */
+    private static LocalDateTime truncateToMillis(LocalDateTime dateTime) {
+        return dateTime.truncatedTo(ChronoUnit.MILLIS);
+    }
 
     @Id
     private long id;
