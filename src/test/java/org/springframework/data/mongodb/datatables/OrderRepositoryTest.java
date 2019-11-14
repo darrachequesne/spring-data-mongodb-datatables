@@ -4,9 +4,15 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoOperations;
+import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,23 +27,27 @@ public class OrderRepositoryTest {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private MongoOperations mongoOperations;
+
     @Before
     public void init() {
         productRepository.deleteAll();
-
-        productRepository.save(Product.PRODUCT1);
-        productRepository.save(Product.PRODUCT2);
-        orderRepository.save(Order.ORDER1(Product.PRODUCT1));
-        orderRepository.save(Order.ORDER2(Product.PRODUCT2));
     }
 
     private DataTablesInput getDefaultInput() {
         DataTablesInput input = new DataTablesInput();
+
+        List<String> productRefColumns = new ArrayList<>();
+        productRefColumns.add("label");
+        productRefColumns.add("isEnabled");
+
+
         input.setColumns(asList(
                 createColumn("id", true, true),
                 createColumn("label", true, true),
                 createColumn("createdAt", true, true),
-                createColumn("product", true, true)
+                createColumn("product", true, true, true, productRefColumns)
         ));
         input.setSearch(new DataTablesInput.Search("", false));
         return input;
@@ -52,6 +62,17 @@ public class OrderRepositoryTest {
         return column;
     }
 
+    private DataTablesInput.Column createColumn(String columnName, boolean orderable, boolean searchable, boolean isRefColumn, List<String> refColumns) {
+        DataTablesInput.Column column = new DataTablesInput.Column();
+        column.setData(columnName);
+        column.setOrderable(orderable);
+        column.setSearchable(searchable);
+        column.setReference(isRefColumn);
+        column.setReferenceColumns(refColumns);
+        column.setSearch(new DataTablesInput.Search("", true));
+        return column;
+    }
+
     @Test
     public void referenceSearchable() {
         DataTablesInput input = getDefaultInput();
@@ -59,6 +80,48 @@ public class OrderRepositoryTest {
         input.setSearch(new DataTablesInput.Search("product2", false));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsOnly(Order.ORDER2(Product.PRODUCT2));
+        assertThat(output.getData()).containsOnly(Order.ORDER1(Product.PRODUCT2));
+    }
+
+    @Test
+    public void manualSpringQuery() {
+
+        // Given
+        Product p3 = Product.PRODUCT3;
+        productRepository.save(Product.PRODUCT2);
+        productRepository.save(p3);
+
+        Order order = Order.ORDER2(p3);
+
+        orderRepository.save(Order.ORDER1(Product.PRODUCT2));
+        orderRepository.save(order);
+
+        // When
+        ProjectionOperation projectDbRefArr = Aggregation
+                .project("label", "createdAt", "product", "_class")
+                .and(ObjectOperators.ObjectToArray.valueOfToArray("product"))
+                .as("product_fk_arr");
+
+        ProjectionOperation projectDbRefObject = Aggregation
+                .project("label", "createdAt", "product", "_class")
+                //.andExpression("{ '$arrayElemAt': [{ '$objectToArray': '$product' }, 1]}").as("product_fk_obj");
+                .and( "product_fk_arr").arrayElementAt(1)
+                .as("product_fk_obj");
+
+        ProjectionOperation projectPidField = Aggregation
+                .project("label", "createdAt", "product", "_class", "product_fk_obj")
+                .and("product_fk_obj.v").as("product_id");
+
+        LookupOperation lookupOperation = Aggregation
+                .lookup("product", "product_id", "_id", "product_resolved");
+
+        MatchOperation matchOperation = Aggregation
+                .match(Criteria.where("product_resolved.label").regex("product3", "i"));
+
+        Aggregation agg = Aggregation.newAggregation(projectDbRefArr, projectDbRefObject, projectPidField, lookupOperation, matchOperation);
+        AggregationResults<Order> data = mongoOperations.aggregate(agg, "order", Order.class);
+
+        // Then
+        assertThat(data.getMappedResults()).containsOnly(order);
     }
 }

@@ -19,7 +19,6 @@ public class Order {
                 .id(1)
                 .label("order1")
                 .createdAt(truncateToMillis(LocalDateTime.now()))
-                .productId(product.getId())
                 .product(product)
                 .build();
     }
@@ -29,7 +28,6 @@ public class Order {
                 .id(2)
                 .label("order2")
                 .createdAt(truncateToMillis(LocalDateTime.now()))
-                .productId(product.getId())
                 .product(product)
                 .build();
     }
@@ -51,8 +49,6 @@ public class Order {
     private String label;
 
     private LocalDateTime createdAt;
-
-    private long productId;
 
     @DBRef
     private Product product;
