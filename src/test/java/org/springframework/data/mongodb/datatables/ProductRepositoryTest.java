@@ -20,12 +20,20 @@ public class ProductRepositoryTest {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private OrderRepository orderRepository;
+
     @Before
     public void init() {
         productRepository.deleteAll();
-        productRepository.save(Product.PRODUCT1);
+
+        Product product1 = Product.PRODUCT1;
+
+        productRepository.save(product1);
         productRepository.save(Product.PRODUCT2);
         productRepository.save(Product.PRODUCT3);
+
+        orderRepository.save(Order.ORDER1(product1));
     }
 
     private DataTablesInput getDefaultInput() {
@@ -222,5 +230,4 @@ public class ProductRepositoryTest {
         DataTablesOutput<Product> output = productRepository.findAll(input);
         assertThat(output.getData()).containsSequence(Product.PRODUCT1, Product.PRODUCT2, Product.PRODUCT3);
     }
-
 }
