@@ -2,6 +2,8 @@ package org.springframework.data.mongodb.datatables;
 
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.repository.query.MongoEntityInformation;
@@ -67,15 +69,22 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
                 return output;
             }
 
-            Query query = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria).toQuery();
-            long recordsFiltered = mongoOperations.count(query, metadata.getCollectionName());
-            output.setRecordsFiltered(recordsFiltered);
-            if (recordsFiltered == 0) {
-                return output;
-            }
+            if (containsReferenceColumn(input)) {
+                Aggregation aggrQuery = new DataTablesRefCriteria(input, additionalCriteria, preFilteringCriteria).toAggregation();
+                AggregationResults<T> data = mongoOperations.aggregate(aggrQuery, metadata.getCollectionName(), metadata.getJavaType());
+                output.setData(converter == null ? (List<R>) data.getMappedResults() : data.getMappedResults().stream().map(converter).collect(toList()));
+            } else {
 
-            List<T> data = mongoOperations.find(query, metadata.getJavaType(), metadata.getCollectionName());
-            output.setData(converter == null ? (List<R>) data : data.stream().map(converter).collect(toList()));
+                Query query = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria).toQuery();
+                long recordsFiltered = mongoOperations.count(query, metadata.getCollectionName());
+                output.setRecordsFiltered(recordsFiltered);
+                if (recordsFiltered == 0) {
+                    return output;
+                }
+
+                List<T> data = mongoOperations.find(query, metadata.getJavaType(), metadata.getCollectionName());
+                output.setData(converter == null ? (List<R>) data : data.stream().map(converter).collect(toList()));
+            }
 
         } catch (Exception e) {
             output.setError(e.toString());
@@ -92,4 +101,13 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
         }
     }
 
+    private boolean containsReferenceColumn(DataTablesInput input) {
+        for (DataTablesInput.Column c: input.getColumns()) {
+            if (c.isReference()) {
+                return  true;
+            }
+        }
+
+        return false;
+    }
 }

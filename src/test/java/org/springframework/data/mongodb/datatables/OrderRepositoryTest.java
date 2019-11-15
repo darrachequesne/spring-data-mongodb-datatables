@@ -47,7 +47,7 @@ public class OrderRepositoryTest {
                 createColumn("id", true, true),
                 createColumn("label", true, true),
                 createColumn("createdAt", true, true),
-                createColumn("product", true, true, true, productRefColumns)
+                createRefColumn("product", true, true, "product", productRefColumns)
         ));
         input.setSearch(new DataTablesInput.Search("", false));
         return input;
@@ -62,12 +62,13 @@ public class OrderRepositoryTest {
         return column;
     }
 
-    private DataTablesInput.Column createColumn(String columnName, boolean orderable, boolean searchable, boolean isRefColumn, List<String> refColumns) {
+    private DataTablesInput.Column createRefColumn(String columnName, boolean orderable, boolean searchable, String refCollection,  List<String> refColumns) {
         DataTablesInput.Column column = new DataTablesInput.Column();
         column.setData(columnName);
         column.setOrderable(orderable);
         column.setSearchable(searchable);
-        column.setReference(isRefColumn);
+        column.setReference(true);
+        column.setReferenceCollection(refCollection);
         column.setReferenceColumns(refColumns);
         column.setSearch(new DataTablesInput.Search("", true));
         return column;
@@ -75,12 +76,23 @@ public class OrderRepositoryTest {
 
     @Test
     public void referenceSearchable() {
+        // Given
+        Product p3 = Product.PRODUCT3;
+        productRepository.save(Product.PRODUCT2);
+        productRepository.save(p3);
+
+        Order order = Order.ORDER2(p3);
+
+        orderRepository.save(Order.ORDER1(Product.PRODUCT2));
+        orderRepository.save(order);
+
+        // When
         DataTablesInput input = getDefaultInput();
-
-        input.setSearch(new DataTablesInput.Search("product2", false));
-
+        input.setSearch(new DataTablesInput.Search("product3", false));
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsOnly(Order.ORDER1(Product.PRODUCT2));
+
+        // Then
+        assertThat(output.getData()).containsOnly(order);
     }
 
     @Test
@@ -104,13 +116,12 @@ public class OrderRepositoryTest {
 
         ProjectionOperation projectDbRefObject = Aggregation
                 .project("label", "createdAt", "product", "_class")
-                //.andExpression("{ '$arrayElemAt': [{ '$objectToArray': '$product' }, 1]}").as("product_fk_obj");
                 .and( "product_fk_arr").arrayElementAt(1)
-                .as("product_fk_obj");
+                .as("product_key_obj");
 
         ProjectionOperation projectPidField = Aggregation
-                .project("label", "createdAt", "product", "_class", "product_fk_obj")
-                .and("product_fk_obj.v").as("product_id");
+                .project("label", "createdAt", "product", "_class")
+                .and("product_key_obj.v").as("product_id");
 
         LookupOperation lookupOperation = Aggregation
                 .lookup("product", "product_id", "_id", "product_resolved");
@@ -119,6 +130,7 @@ public class OrderRepositoryTest {
                 .match(Criteria.where("product_resolved.label").regex("product3", "i"));
 
         Aggregation agg = Aggregation.newAggregation(projectDbRefArr, projectDbRefObject, projectPidField, lookupOperation, matchOperation);
+
         AggregationResults<Order> data = mongoOperations.aggregate(agg, "order", Order.class);
 
         // Then

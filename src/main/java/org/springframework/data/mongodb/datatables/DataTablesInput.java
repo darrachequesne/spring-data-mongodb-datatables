@@ -109,6 +109,8 @@ public class DataTablesInput {
 
         private boolean reference;
 
+        private String referenceCollection;
+
         private List<String> referenceColumns;
 
         /**
