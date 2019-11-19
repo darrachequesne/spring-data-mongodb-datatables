@@ -1,10 +1,8 @@
 package org.springframework.data.mongodb.datatables;
 
-import com.mongodb.BasicDBObject;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,7 +14,6 @@ import static org.springframework.util.ObjectUtils.isEmpty;
 import static org.springframework.util.StringUtils.hasText;
 
 final class DataTablesRefCriteria {
-    private final Query query = new Query();
     private Aggregation aggregation;
 
     DataTablesRefCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria) {
@@ -29,12 +26,16 @@ final class DataTablesRefCriteria {
             aggregationOperations.add(globalMatching);
         }
 
-        // NOT YET ADAPTED [START]
-        input.getColumns().forEach(this::addColumnCriteria);
-        addSort(input);
-        if (additionalCriteria != null) query.addCriteria(additionalCriteria);
-        if (preFilteringCriteria != null) query.addCriteria(preFilteringCriteria);
-        // NOT YET ADAPTED [END]
+        input.getColumns().forEach(column -> {
+            MatchOperation columnCriteriaMatcher = addColumnCriteria(column);
+            if (columnCriteriaMatcher != null) {
+                aggregationOperations.add(addColumnCriteria(column));
+            }
+        });
+        aggregationOperations.addAll(addSort(input));
+
+        if (additionalCriteria != null) aggregationOperations.add(Aggregation.match(additionalCriteria));
+        if (preFilteringCriteria != null) aggregationOperations.add(Aggregation.match(preFilteringCriteria));
 
         aggregation = Aggregation.newAggregation(aggregationOperations);
     }
@@ -44,7 +45,8 @@ final class DataTablesRefCriteria {
         List<AggregationOperation> aggregations = new ArrayList<>();
 
         List<String> columnStrings = input.getColumns().stream()
-                .map(column -> column.getData())
+                .map(column -> column.getData().contains(".") ? column.getData().substring(0, column.getData().indexOf(".")) : column.getData())
+                .distinct()
                 .collect(toList());
 
         for (DataTablesInput.Column c: input.getColumns()) {
@@ -86,10 +88,6 @@ final class DataTablesRefCriteria {
         return aggregations;
     }
 
-    Query toQuery() {
-        return query;
-    }
-
     private AggregationOperation addGlobalCriteria(DataTablesInput input) {
         if (!hasText(input.getSearch().getValue())) return null;
 
@@ -108,18 +106,28 @@ final class DataTablesRefCriteria {
         }
     }
 
-    private void addColumnCriteria(DataTablesInput.Column column) {
+    private MatchOperation addColumnCriteria(DataTablesInput.Column column) {
         if (column.isSearchable() && hasText(column.getSearch().getValue())) {
-            query.addCriteria(createColumnCriteria(column));
+            List<Criteria> criteria = createColumnCriteria(column);
+            if (criteria.size() == 1) {
+                return Aggregation.match(criteria.get(0));
+            } else if (criteria.size() >= 2) {
+                return Aggregation.match(new Criteria().orOperator(criteria.toArray(new Criteria[0])));
+            }
         }
+
+        return null;
     }
 
-    private Criteria createColumnCriteria(DataTablesInput.Column column) {
+    private List<Criteria> createColumnCriteria(DataTablesInput.Column column) {
         String searchValue = column.getSearch().getValue();
         if ("true".equalsIgnoreCase(searchValue) || "false".equalsIgnoreCase(searchValue)) {
-            return where(column.getData()).is(Boolean.valueOf(searchValue));
+            Criteria c = where(column.getData()).is(Boolean.valueOf(searchValue));
+            List<Criteria> criteria = new ArrayList<>();
+            criteria.add(c);
+            return criteria;
         } else {
-            return createCriteria(column, column.getSearch());
+            return createCriteriaRefSupport(column, column.getSearch());
         }
     }
 
@@ -155,16 +163,23 @@ final class DataTablesRefCriteria {
         }
     }
 
-    private void addSort(DataTablesInput input) {
-        query.skip(input.getStart());
-        query.limit(input.getLength());
+    private List<AggregationOperation> addSort(DataTablesInput input) {
+        List<AggregationOperation> operations = new ArrayList<>();
 
-        if (isEmpty(input.getOrder())) return;
+        operations.add(Aggregation.skip(input.getStart()));
+        operations.add(Aggregation.limit(input.getLength()));
+
+        if (isEmpty(input.getOrder())) return operations;
 
         List<Sort.Order> orders = input.getOrder().stream()
                 .filter(order -> isOrderable(input, order))
                 .map(order -> toOrder(input, order)).collect(toList());
-        query.with(by(orders));
+
+        if (orders.size() != 0) {
+            operations.add(Aggregation.sort(by(orders)));
+        }
+
+        return operations;
     }
 
     private boolean isOrderable(DataTablesInput input, DataTablesInput.Order order) {
@@ -178,6 +193,8 @@ final class DataTablesRefCriteria {
                 input.getColumns().get(order.getColumn()).getData()
         );
     }
+
+    // TODO: get column name which is NOT existing!
 
     public Aggregation toAggregation() {
         return aggregation;

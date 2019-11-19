@@ -8,9 +8,12 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.repository.query.MongoEntityInformation;
 import org.springframework.data.mongodb.repository.support.SimpleMongoRepository;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import static java.util.stream.Collectors.toList;
@@ -63,17 +66,41 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
         }
 
         try {
-            long recordsTotal = count(preFilteringCriteria);
-            output.setRecordsTotal(recordsTotal);
-            if (recordsTotal == 0) {
-                return output;
-            }
-
             if (containsReferenceColumn(input)) {
+
+                if (containsReferenceColumn(input, preFilteringCriteria)) {
+                    output.setRecordsTotal(-1);
+                } else {
+                    long recordsTotal = count(preFilteringCriteria);
+                    output.setRecordsTotal(recordsTotal);
+                    if (recordsTotal == 0) {
+                        return output;
+                    }
+
+                    if (containsReferenceColumn(input, additionalCriteria)) {
+                        output.setRecordsFiltered(-1);
+                    } else {
+                        Query query = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria).toQuery();
+                        long recordsFiltered = mongoOperations.count(query, metadata.getCollectionName());
+                        output.setRecordsFiltered(recordsFiltered);
+                        if (recordsFiltered == 0) {
+                            return output;
+                        }
+                    }
+                }
+
                 Aggregation aggrQuery = new DataTablesRefCriteria(input, additionalCriteria, preFilteringCriteria).toAggregation();
                 AggregationResults<T> data = mongoOperations.aggregate(aggrQuery, metadata.getCollectionName(), metadata.getJavaType());
                 output.setData(converter == null ? (List<R>) data.getMappedResults() : data.getMappedResults().stream().map(converter).collect(toList()));
+
+
             } else {
+
+                long recordsTotal = count(preFilteringCriteria);
+                output.setRecordsTotal(recordsTotal);
+                if (recordsTotal == 0) {
+                    return output;
+                }
 
                 Query query = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria).toQuery();
                 long recordsFiltered = mongoOperations.count(query, metadata.getCollectionName());
@@ -101,10 +128,26 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
         }
     }
 
+    // TODO: countWithRef?
+
     private boolean containsReferenceColumn(DataTablesInput input) {
         for (DataTablesInput.Column c: input.getColumns()) {
             if (c.isReference()) {
                 return  true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean containsReferenceColumn(DataTablesInput input, Criteria criteria) {
+        if (criteria == null) return false;
+
+        for (DataTablesInput.Column c: input.getColumns()) {
+            if (c.isReference()) {
+                if (criteria.getCriteriaObject().containsKey(c.getData())) {
+                    return true;
+                }
             }
         }
 
