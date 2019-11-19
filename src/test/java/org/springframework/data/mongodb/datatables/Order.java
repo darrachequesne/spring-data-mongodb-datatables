@@ -2,12 +2,14 @@ package org.springframework.data.mongodb.datatables;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.Singular;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Document
 @Data
@@ -18,8 +20,11 @@ public class Order {
         return Order.builder()
                 .id(1)
                 .label("order1")
+                .isEnabled(true)
                 .createdAt(truncateToMillis(LocalDateTime.now()))
                 .product(product)
+                .characteristic(new Product.Characteristic("key1", "val11"))
+                .characteristic(new Product.Characteristic("key2", "val21"))
                 .build();
     }
 
@@ -27,8 +32,21 @@ public class Order {
         return Order.builder()
                 .id(2)
                 .label("order2")
-                .createdAt(truncateToMillis(LocalDateTime.now()))
+                .isEnabled(true)
+                .createdAt(truncateToMillis(LocalDateTime.now().plusHours(1)))
                 .product(product)
+                .characteristic(new Product.Characteristic("key1", "val12"))
+                .build();
+    }
+
+    static Order ORDER3(Product product) {
+        return Order.builder()
+                .id(3)
+                .label("order3")
+                .isEnabled(false)
+                .createdAt(truncateToMillis(LocalDateTime.now().minusHours(1)))
+                .product(product)
+                .characteristic(new Product.Characteristic("key2", "val23"))
                 .build();
     }
 
@@ -46,9 +64,14 @@ public class Order {
     @Id
     private long id;
 
+    private boolean isEnabled;
+
     private String label;
 
     private LocalDateTime createdAt;
+
+    @Singular
+    private List<Product.Characteristic> characteristics;
 
     @DBRef
     private Product product;

@@ -20,20 +20,13 @@ public class ProductRepositoryTest {
     @Autowired
     private ProductRepository productRepository;
 
-    @Autowired
-    private OrderRepository orderRepository;
-
     @Before
     public void init() {
         productRepository.deleteAll();
 
-        Product product1 = Product.PRODUCT1;
-
-        productRepository.save(product1);
+        productRepository.save(Product.PRODUCT1);
         productRepository.save(Product.PRODUCT2);
         productRepository.save(Product.PRODUCT3);
-
-        orderRepository.save(Order.ORDER1(product1));
     }
 
     private DataTablesInput getDefaultInput() {
