@@ -152,6 +152,7 @@ public class OrderRepositoryTest {
         assertThat(output.getData()).containsOnly(order1, order2, order3);
     }
 
+    @Ignore
     @Test
     public void paginated() {
         DataTablesInput input = getDefaultInput();
@@ -399,17 +400,16 @@ public class OrderRepositoryTest {
     }
 
     /**
-     * Not supported -> empty result. Directly searching i
+     * Not supported -> handle as if column does not exist
      */
     @Test
-    @Ignore
     public void ref_subDocument() {
         DataTablesInput input = getDefaultInput();
         input.getColumn("product.isEnabled").ifPresent(column ->
                 column.setSearch(new DataTablesInput.Search("true", false)));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData().size()).isEqualTo(0);
+        assertThat(output.getData().size()).isEqualTo(3);
     }
 
     @Test
