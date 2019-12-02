@@ -6,3 +6,6 @@
 *.iml
 build/
 target/
+jmh-result.json
+
+report.txt

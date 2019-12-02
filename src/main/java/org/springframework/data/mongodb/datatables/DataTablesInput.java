@@ -113,6 +113,8 @@ public class DataTablesInput {
 
         private List<String> referenceColumns;
 
+        private String referenceOrderColumn;
+
         /**
          * Search value to apply to this specific column.
          */

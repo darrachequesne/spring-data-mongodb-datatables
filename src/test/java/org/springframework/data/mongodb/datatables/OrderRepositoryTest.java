@@ -1,13 +1,13 @@
 package org.springframework.data.mongodb.datatables;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
@@ -19,6 +19,9 @@ import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.data.mongodb.core.query.Criteria.where;
 
+/**
+ * Includes the same tests as ProductRepositoryTest and more. Tests the functionality against the aggregation pipeline.
+ */
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(classes = TestConfiguration.class)
 public class OrderRepositoryTest {
@@ -60,6 +63,7 @@ public class OrderRepositoryTest {
         List<String> productRefColumns = new ArrayList<>();
         productRefColumns.add("label");
         productRefColumns.add("isEnabled");
+        productRefColumns.add("createdAt");
 
         input.setColumns(asList(
                 createColumn("id", true, true),
@@ -68,7 +72,7 @@ public class OrderRepositoryTest {
                 createColumn("createdAt", true, true),
                 createColumn("characteristics.key", true, true),
                 createColumn("characteristics.value", true, true),
-                createRefColumn("product", true, true, "product", productRefColumns)
+                createRefColumn("product", true, true, "product", productRefColumns, "createdAt")
         ));
         input.setSearch(new DataTablesInput.Search("", false));
         return input;
@@ -83,7 +87,7 @@ public class OrderRepositoryTest {
         return column;
     }
 
-    private DataTablesInput.Column createRefColumn(String columnName, boolean orderable, boolean searchable, String refCollection,  List<String> refColumns) {
+    private DataTablesInput.Column createRefColumn(String columnName, boolean orderable, boolean searchable, String refCollection,  List<String> refColumns, String orderColumn) {
         DataTablesInput.Column column = new DataTablesInput.Column();
         column.setData(columnName);
         column.setOrderable(orderable);
@@ -91,8 +95,51 @@ public class OrderRepositoryTest {
         column.setReference(true);
         column.setReferenceCollection(refCollection);
         column.setReferenceColumns(refColumns);
+        column.setReferenceOrderColumn(orderColumn);
         column.setSearch(new DataTablesInput.Search("", true));
         return column;
+    }
+
+    @Test
+    public void referenceSearchable() {
+        // When
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search("order3", false));
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+
+        // Then
+        assertThat(output.getData()).containsOnly(order3);
+    }
+
+    @Test
+    public void manualSpringQuery() {
+        // When
+        ProjectionOperation projectDbRefArr = Aggregation
+                .project("label", "isEnabled", "characteristics", "createdAt", "product", "_class")
+                .and(ObjectOperators.ObjectToArray.valueOfToArray("product"))
+                .as("product_fk_arr");
+
+        ProjectionOperation projectDbRefObject = Aggregation
+                .project("label", "isEnabled", "characteristics", "createdAt", "product", "_class")
+                .and( "product_fk_arr").arrayElementAt(1)
+                .as("product_key_obj");
+
+        ProjectionOperation projectPidField = Aggregation
+                .project("label", "characteristics", "isEnabled", "createdAt", "product", "_class")
+                .and("product_key_obj.v").as("product_id");
+
+        LookupOperation lookupOperation = Aggregation
+                .lookup("product", "product_id", "_id", "product_resolved");
+
+        MatchOperation matchOperation = Aggregation
+                .match(Criteria.where("product_resolved.label").regex("product3", "i"));
+
+        Aggregation agg = Aggregation.newAggregation(projectDbRefArr, projectDbRefObject, projectPidField, lookupOperation, matchOperation);
+
+        AggregationResults<Order> data = mongoOperations.aggregate(agg, "order", Order.class);
+
+        // Then
+        assertThat(data.getMappedResults()).containsOnly(order3);
     }
 
     @Test
@@ -204,6 +251,7 @@ public class OrderRepositoryTest {
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getRecordsFiltered()).isEqualTo(3);
         assertThat(output.getRecordsTotal()).isEqualTo(3);
+        assertThat(output.getData()).hasSize(3);
     }
 
     @Test
@@ -267,44 +315,139 @@ public class OrderRepositoryTest {
     }
 
     @Test
-    public void referenceSearchable() {
-        // When
+    public void ref_globalFilter() {
         DataTablesInput input = getDefaultInput();
-        input.setSearch(new DataTablesInput.Search("order3", false));
-        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        input.setSearch(new DataTablesInput.Search("product2", false));
 
-        // Then
-        assertThat(output.getData()).containsOnly(order3);
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order2);
     }
 
     @Test
-    public void manualSpringQuery() {
-        // When
-        ProjectionOperation projectDbRefArr = Aggregation
-                .project("label", "isEnabled", "characteristics", "createdAt", "product", "_class")
-                .and(ObjectOperators.ObjectToArray.valueOfToArray("product"))
-                .as("product_fk_arr");
+    public void ref_globalFilter_contains() {
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search(" PrODUct2 ", false));
 
-        ProjectionOperation projectDbRefObject = Aggregation
-                .project("label", "isEnabled", "characteristics", "createdAt", "product", "_class")
-                .and( "product_fk_arr").arrayElementAt(1)
-                .as("product_key_obj");
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order2);
+    }
 
-        ProjectionOperation projectPidField = Aggregation
-                .project("label", "characteristics", "isEnabled", "createdAt", "product", "_class")
-                .and("product_key_obj.v").as("product_id");
+    /**
+     * Should be sorted by a special ref-sortable column name
+     */
+    @Test
+    public void ref_sortAscending() {
+        DataTablesInput input = getDefaultInput();
+        input.setOrder(singletonList(new DataTablesInput.Order(6, DataTablesInput.Order.Direction.asc)));
 
-        LookupOperation lookupOperation = Aggregation
-                .lookup("product", "product_id", "_id", "product_resolved");
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsSequence(order3, order1, order2);
+    }
 
-        MatchOperation matchOperation = Aggregation
-                .match(Criteria.where("product_resolved.label").regex("product3", "i"));
+    /**
+     * Should be sorted by a special ref-sortable column name
+     */
+    @Test
+    public void ref_sortDescending() {
+        DataTablesInput input = getDefaultInput();
+        input.setOrder(singletonList(new DataTablesInput.Order(6, DataTablesInput.Order.Direction.desc)));
 
-        Aggregation agg = Aggregation.newAggregation(projectDbRefArr, projectDbRefObject, projectPidField, lookupOperation, matchOperation);
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsSequence(order2, order1, order3);
+    }
 
-        AggregationResults<Order> data = mongoOperations.aggregate(agg, "order", Order.class);
+    /**
+     * All refColumns should be searched
+     */
+    @Test
+    @Ignore
+    public void ref_columnFilter() {
+        DataTablesInput input = getDefaultInput();
+        input.getColumn("product").ifPresent(column ->
+                column.setSearch(new DataTablesInput.Search(" PROduct3  ", false)));
 
-        // Then
-        assertThat(data.getMappedResults()).containsOnly(order3);
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order3);
+    }
+
+    /**
+     * All refColumns should be searched
+     */
+    @Test
+    @Ignore
+    public void ref_columnFilterRegex() {
+        DataTablesInput input = getDefaultInput();
+        input.getColumn("product").ifPresent(column ->
+                column.setSearch(new DataTablesInput.Search("^o\\w+der3$", true)));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order3);
+    }
+
+    /**
+     * All refColumns should be searched
+     */
+    @Test
+    @Ignore
+    public void ref_booleanAttribute() {
+        DataTablesInput input = getDefaultInput();
+        input.getColumn("product").ifPresent(column ->
+                column.setSearch(new DataTablesInput.Search("true", false)));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order1, order2);
+    }
+
+    /**
+     * Not supported -> empty result. Directly searching i
+     */
+    @Test
+    @Ignore
+    public void ref_subDocument() {
+        DataTablesInput input = getDefaultInput();
+        input.getColumn("product.isEnabled").ifPresent(column ->
+                column.setSearch(new DataTablesInput.Search("true", false)));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData().size()).isEqualTo(0);
+    }
+
+    @Test
+    public void ref_additionalCriteria() {
+        Criteria criteria = where("product").in("product1", "product2");
+
+        DataTablesOutput<Order> output = orderRepository.findAll(getDefaultInput(), criteria);
+        assertThat(output.getError()).startsWith(new IllegalArgumentException().toString());
+    }
+
+    @Test
+    public void ref_preFilteringCriteria() {
+        Criteria criteria = where("product").in("product2", "product3");
+
+        DataTablesOutput<Order> output = orderRepository.findAll(getDefaultInput(), null, criteria);
+        assertThat(output.getError()).startsWith(new IllegalArgumentException().toString());
+    }
+
+    @Test
+    public void ref_columnNotSearchable() {
+        DataTablesInput input = getDefaultInput();
+        input.getColumn("product").ifPresent(column -> {
+            column.setSearch(new DataTablesInput.Search(" PROduct3  ", false));
+            column.setSearchable(false);
+        });
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order1, order2, order3);
+    }
+
+    @Test
+    public void ref_columnNotOrderable() {
+        DataTablesInput input = getDefaultInput();
+        input.setOrder(singletonList(new DataTablesInput.Order(6, DataTablesInput.Order.Direction.asc)));
+        input.getColumn("product").ifPresent(column ->
+                column.setOrderable(false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsSequence(order1, order2, order3);
     }
 }

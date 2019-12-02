@@ -3,9 +3,12 @@ package org.springframework.data.mongodb.datatables;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static java.util.stream.Collectors.toList;
 import static org.springframework.data.domain.Sort.by;
@@ -14,6 +17,7 @@ import static org.springframework.util.ObjectUtils.isEmpty;
 import static org.springframework.util.StringUtils.hasText;
 
 final class DataTablesRefCriteria {
+    private Map<String, String> resolvedColumn = new HashMap<>();
     private Aggregation aggregation;
 
     DataTablesRefCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria) {
@@ -50,7 +54,11 @@ final class DataTablesRefCriteria {
                 .collect(toList());
 
         for (DataTablesInput.Column c: input.getColumns()) {
-            if (c.isReference()) {
+            if (c.isReference() && (c.isSearchable() || c.isOrderable())) {
+
+                String resolvedReferenceColumn = getResolvedRefColumn(c, columnStrings);
+
+                resolvedColumn.put(c.getData(), resolvedReferenceColumn);
 
                 String[] columnStringsArr = columnStrings.toArray(new String[0]);
 
@@ -58,25 +66,25 @@ final class DataTablesRefCriteria {
                 ProjectionOperation projectDbRefArr = Aggregation
                         .project(columnStringsArr)
                         .and(ObjectOperators.ObjectToArray.valueOfToArray(c.getData()))
-                        .as(c.getData() + "_fk_arr");
+                        .as(resolvedReferenceColumn + "_fk_arr");
 
                 // Extract object with Id from array
                 ProjectionOperation projectDbRefObject = Aggregation
                         .project(columnStringsArr)
-                        .and( c.getData() + "_fk_arr").arrayElementAt(1)
-                        .as(c.getData() + "_fk_obj");
+                        .and( resolvedReferenceColumn + "_fk_arr").arrayElementAt(1)
+                        .as(resolvedReferenceColumn + "_fk_obj");
 
                 // Get value field from key-value object
                 ProjectionOperation projectPidField = Aggregation
                         .project(columnStringsArr)
-                        .and(c.getData() + "_fk_obj.v").as(c.getData() + "_id");
+                        .and(resolvedReferenceColumn + "_fk_obj.v").as(resolvedReferenceColumn + "_id");
 
                 // Lookup object with id in reference collection and save it in document
                 LookupOperation lookupOperation = Aggregation
-                        .lookup(c.getReferenceCollection(), c.getData() + "_id", "_id", c.getData() + "_resolved");
+                        .lookup(c.getReferenceCollection(), resolvedReferenceColumn + "_id", "_id", resolvedReferenceColumn);
 
                 // Make sure resolved object stays in future projections
-                columnStrings.add(c.getData() + "_resolved");
+                columnStrings.add(resolvedReferenceColumn);
 
                 aggregations.add(projectDbRefArr);
                 aggregations.add(projectDbRefObject);
@@ -94,7 +102,7 @@ final class DataTablesRefCriteria {
         Criteria[] criteriaArray = input.getColumns().stream()
                 .filter(DataTablesInput.Column::isSearchable)
                 .map(column -> createCriteriaRefSupport(column, input.getSearch()))
-                .flatMap(criteraList -> criteraList.stream())
+                .flatMap(criteriaList -> criteriaList.stream())
                 .toArray(Criteria[]::new);
 
         if (criteriaArray.length == 1) {
@@ -147,7 +155,7 @@ final class DataTablesRefCriteria {
         if (column.isReference()) {
             return column.getReferenceColumns().stream()
                     .map(data -> search.isRegex() ?
-                            where(column.getData() + "_resolved." + data).regex(searchValue) : where(column.getData() + "_resolved." + data).regex(searchValue.trim(), "i"))
+                            where(resolvedColumn.get(column.getData()) + "." + data).regex(searchValue) : where(resolvedColumn.get(column.getData()) + "." + data).regex(searchValue.trim(), "i"))
                     .collect(toList());
 
 
@@ -167,7 +175,10 @@ final class DataTablesRefCriteria {
         List<AggregationOperation> operations = new ArrayList<>();
 
         operations.add(Aggregation.skip(input.getStart()));
-        operations.add(Aggregation.limit(input.getLength()));
+
+        if (input.getLength() >= 0) {
+            operations.add(Aggregation.limit(input.getLength()));
+        }
 
         if (isEmpty(input.getOrder())) return operations;
 
@@ -184,17 +195,37 @@ final class DataTablesRefCriteria {
 
     private boolean isOrderable(DataTablesInput input, DataTablesInput.Order order) {
         boolean isWithinBounds = order.getColumn() < input.getColumns().size();
-        return isWithinBounds && input.getColumns().get(order.getColumn()).isOrderable();
+
+        DataTablesInput.Column column = input.getColumns().get(order.getColumn());
+        return isWithinBounds && column.isOrderable()
+                && (!column.isReference() || (column.isReference() && !StringUtils.isEmpty(column.getReferenceOrderColumn())));
     }
 
     private Sort.Order toOrder(DataTablesInput input, DataTablesInput.Order order) {
-        return new Sort.Order(
-                order.getDir() == DataTablesInput.Order.Direction.asc ? Sort.Direction.ASC : Sort.Direction.DESC,
-                input.getColumns().get(order.getColumn()).getData()
-        );
+        DataTablesInput.Column column = input.getColumns().get(order.getColumn());
+        Sort.Direction sortDir = order.getDir() == DataTablesInput.Order.Direction.asc ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        if (column.isReference()) {
+            return new Sort.Order(sortDir, resolvedColumn.get(column.getData()) + "." + column.getReferenceOrderColumn());
+        }
+
+
+        return new Sort.Order(sortDir, column.getData());
     }
 
-    // TODO: get column name which is NOT existing!
+    private String getResolvedRefColumn(DataTablesInput.Column c, List<String> columnStrings) {
+
+        String resolvedColumn = c.getData();
+        boolean columnAlreadyExists;
+
+        do {
+            resolvedColumn += "_";
+            String columnName = resolvedColumn;
+            columnAlreadyExists = columnStrings.stream().anyMatch(s -> s.startsWith(columnName));
+        } while (columnAlreadyExists);
+
+        return resolvedColumn;
+    }
 
     public Aggregation toAggregation() {
         return aggregation;
