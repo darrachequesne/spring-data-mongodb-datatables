@@ -19,6 +19,7 @@ import static org.springframework.util.StringUtils.hasText;
 final class DataTablesRefCriteria {
     private Map<String, String> resolvedColumn = new HashMap<>();
     private Aggregation aggregation;
+    private Aggregation filteredCountAggregation;
 
     DataTablesRefCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria) {
 
@@ -33,14 +34,19 @@ final class DataTablesRefCriteria {
         input.getColumns().forEach(column -> {
             MatchOperation columnCriteriaMatcher = addColumnCriteria(column);
             if (columnCriteriaMatcher != null) {
-                aggregationOperations.add(addColumnCriteria(column));
+                aggregationOperations.add(columnCriteriaMatcher);
             }
         });
-        aggregationOperations.addAll(addSort(input));
 
         if (additionalCriteria != null) aggregationOperations.add(Aggregation.match(additionalCriteria));
         if (preFilteringCriteria != null) aggregationOperations.add(Aggregation.match(preFilteringCriteria));
 
+        List<AggregationOperation> filteredCountOperations = new ArrayList<>(aggregationOperations);
+        filteredCountOperations.add(Aggregation.count().as("filtered_count"));
+
+        filteredCountAggregation = Aggregation.newAggregation(filteredCountOperations);
+
+        aggregationOperations.addAll(addSort(input));
         aggregation = Aggregation.newAggregation(aggregationOperations);
     }
 
@@ -116,7 +122,7 @@ final class DataTablesRefCriteria {
 
     private MatchOperation addColumnCriteria(DataTablesInput.Column column) {
         if (column.isSearchable() && hasText(column.getSearch().getValue())) {
-            List<Criteria> criteria = createColumnCriteria(column);
+            List<Criteria> criteria = createCriteriaRefSupport(column, column.getSearch());
             if (criteria.size() == 1) {
                 return Aggregation.match(criteria.get(0));
             } else if (criteria.size() >= 2) {
@@ -127,38 +133,31 @@ final class DataTablesRefCriteria {
         return null;
     }
 
-    private List<Criteria> createColumnCriteria(DataTablesInput.Column column) {
-        String searchValue = column.getSearch().getValue();
-        if ("true".equalsIgnoreCase(searchValue) || "false".equalsIgnoreCase(searchValue)) {
+    private List<Criteria> createCriteriaRefSupport(DataTablesInput.Column column, DataTablesInput.Search search) {
+
+        String searchValue = search.getValue();
+        boolean isBooleanSearch = "true".equalsIgnoreCase(searchValue) || "false".equalsIgnoreCase(searchValue);
+
+
+        if (column.isReference()) {
+
+            if (isBooleanSearch) {
+                boolean booleanSearchValue = Boolean.valueOf(searchValue);
+
+                return column.getReferenceColumns().stream()
+                        .map(data -> where(resolvedColumn.get(column.getData()) + "." + data).is(booleanSearchValue))
+                        .collect(toList());
+            } else {
+                return column.getReferenceColumns().stream()
+                        .map(data -> search.isRegex() ?
+                                where(resolvedColumn.get(column.getData()) + "." + data).regex(searchValue) : where(resolvedColumn.get(column.getData()) + "." + data).regex(searchValue.trim(), "i"))
+                        .collect(toList());
+            }
+        } else if (isBooleanSearch) {
             Criteria c = where(column.getData()).is(Boolean.valueOf(searchValue));
             List<Criteria> criteria = new ArrayList<>();
             criteria.add(c);
             return criteria;
-        } else {
-            return createCriteriaRefSupport(column, column.getSearch());
-        }
-    }
-
-    private Criteria createCriteria(DataTablesInput.Column column, DataTablesInput.Search search) {
-        String searchValue = search.getValue();
-        if (search.isRegex()) {
-            return where(column.getData()).regex(searchValue);
-        } else {
-            return where(column.getData()).regex(searchValue.trim(), "i");
-        }
-    }
-
-    private List<Criteria> createCriteriaRefSupport(DataTablesInput.Column column, DataTablesInput.Search search) {
-
-        String searchValue = search.getValue();
-
-        if (column.isReference()) {
-            return column.getReferenceColumns().stream()
-                    .map(data -> search.isRegex() ?
-                            where(resolvedColumn.get(column.getData()) + "." + data).regex(searchValue) : where(resolvedColumn.get(column.getData()) + "." + data).regex(searchValue.trim(), "i"))
-                    .collect(toList());
-
-
         } else {
             List<Criteria> criteria = new ArrayList<>();
             if (search.isRegex()) {
@@ -229,5 +228,9 @@ final class DataTablesRefCriteria {
 
     public Aggregation toAggregation() {
         return aggregation;
+    }
+
+    public Aggregation toFilteredCountAggregation() {
+        return filteredCountAggregation;
     }
 }

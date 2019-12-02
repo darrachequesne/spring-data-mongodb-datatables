@@ -1,7 +1,6 @@
 package org.springframework.data.mongodb.datatables;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,44 +101,11 @@ public class OrderRepositoryTest {
 
     @Test
     public void referenceSearchable() {
-        // When
         DataTablesInput input = getDefaultInput();
-        input.setSearch(new DataTablesInput.Search("order3", false));
+        input.setSearch(new DataTablesInput.Search("product3", false));
         DataTablesOutput<Order> output = orderRepository.findAll(input);
 
-        // Then
         assertThat(output.getData()).containsOnly(order3);
-    }
-
-    @Test
-    public void manualSpringQuery() {
-        // When
-        ProjectionOperation projectDbRefArr = Aggregation
-                .project("label", "isEnabled", "characteristics", "createdAt", "product", "_class")
-                .and(ObjectOperators.ObjectToArray.valueOfToArray("product"))
-                .as("product_fk_arr");
-
-        ProjectionOperation projectDbRefObject = Aggregation
-                .project("label", "isEnabled", "characteristics", "createdAt", "product", "_class")
-                .and( "product_fk_arr").arrayElementAt(1)
-                .as("product_key_obj");
-
-        ProjectionOperation projectPidField = Aggregation
-                .project("label", "characteristics", "isEnabled", "createdAt", "product", "_class")
-                .and("product_key_obj.v").as("product_id");
-
-        LookupOperation lookupOperation = Aggregation
-                .lookup("product", "product_id", "_id", "product_resolved");
-
-        MatchOperation matchOperation = Aggregation
-                .match(Criteria.where("product_resolved.label").regex("product3", "i"));
-
-        Aggregation agg = Aggregation.newAggregation(projectDbRefArr, projectDbRefObject, projectPidField, lookupOperation, matchOperation);
-
-        AggregationResults<Order> data = mongoOperations.aggregate(agg, "order", Order.class);
-
-        // Then
-        assertThat(data.getMappedResults()).containsOnly(order3);
     }
 
     @Test
@@ -152,7 +118,6 @@ public class OrderRepositoryTest {
         assertThat(output.getData()).containsOnly(order1, order2, order3);
     }
 
-    @Ignore
     @Test
     public void paginated() {
         DataTablesInput input = getDefaultInput();
@@ -315,24 +280,6 @@ public class OrderRepositoryTest {
         assertThat(output.getData()).containsSequence(order1, order2, order3);
     }
 
-    @Test
-    public void ref_globalFilter() {
-        DataTablesInput input = getDefaultInput();
-        input.setSearch(new DataTablesInput.Search("product2", false));
-
-        DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsOnly(order2);
-    }
-
-    @Test
-    public void ref_globalFilter_contains() {
-        DataTablesInput input = getDefaultInput();
-        input.setSearch(new DataTablesInput.Search(" PrODUct2 ", false));
-
-        DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsOnly(order2);
-    }
-
     /**
      * Should be sorted by a special ref-sortable column name
      */
@@ -357,11 +304,37 @@ public class OrderRepositoryTest {
         assertThat(output.getData()).containsSequence(order2, order1, order3);
     }
 
+    @Test
+    public void ref_globalFilter() {
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search("product2", false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order2);
+    }
+
+    @Test
+    public void ref_globalFilter_contains() {
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search(" PrODUct2 ", false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order2);
+    }
+
+    @Test
+    public void ref_globalFilterRegex() {
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search("^p\\w+uct2$", true));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order2);
+    }
+
     /**
-     * All refColumns should be searched
+     * Searches all reference columns of the specified reference column
      */
     @Test
-    @Ignore
     public void ref_columnFilter() {
         DataTablesInput input = getDefaultInput();
         input.getColumn("product").ifPresent(column ->
@@ -372,24 +345,22 @@ public class OrderRepositoryTest {
     }
 
     /**
-     * All refColumns should be searched
+     * Searches all reference columns of the specified reference column
      */
     @Test
-    @Ignore
     public void ref_columnFilterRegex() {
         DataTablesInput input = getDefaultInput();
         input.getColumn("product").ifPresent(column ->
-                column.setSearch(new DataTablesInput.Search("^o\\w+der3$", true)));
+                column.setSearch(new DataTablesInput.Search("^p\\w+uct3$", true)));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order3);
     }
 
     /**
-     * All refColumns should be searched
+     * Searches all reference columns of the specified reference column
      */
     @Test
-    @Ignore
     public void ref_booleanAttribute() {
         DataTablesInput input = getDefaultInput();
         input.getColumn("product").ifPresent(column ->
@@ -413,6 +384,16 @@ public class OrderRepositoryTest {
     }
 
     @Test
+    public void ref_converter() {
+        DataTablesOutput<Product> output = orderRepository.findAll(getDefaultInput(), Order::getProduct);
+
+        assertThat(output.getData()).containsOnly(Product.PRODUCT1, Product.PRODUCT2, Product.PRODUCT3);
+    }
+
+    /**
+     * Currently not supported for reference columns
+     */
+    @Test
     public void ref_additionalCriteria() {
         Criteria criteria = where("product").in("product1", "product2");
 
@@ -420,6 +401,9 @@ public class OrderRepositoryTest {
         assertThat(output.getError()).startsWith(new IllegalArgumentException().toString());
     }
 
+    /**
+     * Currently not supported for reference columns
+     */
     @Test
     public void ref_preFilteringCriteria() {
         Criteria criteria = where("product").in("product2", "product3");

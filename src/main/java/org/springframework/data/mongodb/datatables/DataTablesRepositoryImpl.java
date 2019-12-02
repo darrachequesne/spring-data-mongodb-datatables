@@ -1,5 +1,7 @@
 package org.springframework.data.mongodb.datatables;
 
+import com.mongodb.DBObject;
+import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
@@ -74,21 +76,18 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
                     return output;
                 }
 
-                //TODO: support recordstotal count with aggregation
+                DataTablesRefCriteria refCriteria = new DataTablesRefCriteria(input, additionalCriteria, preFilteringCriteria);
 
-                Aggregation aggregation = new DataTablesRefCriteria(input, additionalCriteria, preFilteringCriteria).toAggregation();
-                /*Query query = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria).toQuery();
-                long recordsFiltered = mongoOperations.count(query, metadata.getCollectionName());
+                AggregationResults<Document> result = mongoOperations.aggregate(refCriteria.toFilteredCountAggregation(), metadata.getCollectionName(), Document.class);
+                int recordsFiltered = (Integer)result.getUniqueMappedResult().get("filtered_count");
 
                 output.setRecordsFiltered(recordsFiltered);
                 if (recordsFiltered == 0) {
                     return output;
-                }*/
-                //TODO: support records filtered count with aggregation! (-> needed for paging?)
+                }
 
-                AggregationResults<T> data = mongoOperations.aggregate(aggregation, metadata.getCollectionName(), metadata.getJavaType());
+                AggregationResults<T> data = mongoOperations.aggregate(refCriteria.toAggregation(), metadata.getCollectionName(), metadata.getJavaType());
                 output.setData(converter == null ? (List<R>) data.getMappedResults() : data.getMappedResults().stream().map(converter).collect(toList()));
-                output.setRecordsFiltered(data.getMappedResults().size());
             } else {
 
                 long recordsTotal = count(preFilteringCriteria);
