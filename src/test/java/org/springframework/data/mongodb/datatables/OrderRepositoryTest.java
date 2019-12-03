@@ -161,6 +161,16 @@ public class OrderRepositoryTest {
     }
 
     @Test
+    public void globalFilter_empty_result() {
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search(" axb  ", false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData().size()).isEqualTo(0);
+        assertThat(output.getError()).isNullOrEmpty();
+    }
+
+    @Test
     public void globalFilterRegex() {
         DataTablesInput input = getDefaultInput();
         input.setSearch(new DataTablesInput.Search("^o\\w+der2$", true));

@@ -79,8 +79,12 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
                 DataTablesRefCriteria refCriteria = new DataTablesRefCriteria(input, additionalCriteria, preFilteringCriteria);
 
                 AggregationResults<Document> result = mongoOperations.aggregate(refCriteria.toFilteredCountAggregation(), metadata.getCollectionName(), Document.class);
-                int recordsFiltered = (Integer)result.getUniqueMappedResult().get("filtered_count");
 
+                int recordsFiltered = 0;
+
+                if (result.getUniqueMappedResult() != null) {
+                    recordsFiltered = (Integer) result.getUniqueMappedResult().get("filtered_count");
+                }
                 output.setRecordsFiltered(recordsFiltered);
                 if (recordsFiltered == 0) {
                     return output;
