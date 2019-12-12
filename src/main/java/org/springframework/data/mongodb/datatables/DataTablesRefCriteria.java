@@ -1,14 +1,15 @@
 package org.springframework.data.mongodb.datatables;
 
+import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.beans.PropertyDescriptor;
+import java.lang.reflect.Method;
+import java.util.*;
 
 import static java.util.stream.Collectors.toList;
 import static org.springframework.data.domain.Sort.by;
@@ -16,12 +17,14 @@ import static org.springframework.data.mongodb.core.query.Criteria.where;
 import static org.springframework.util.ObjectUtils.isEmpty;
 import static org.springframework.util.StringUtils.hasText;
 
-final class DataTablesRefCriteria {
+final class DataTablesRefCriteria<T> {
     private Map<String, String> resolvedColumn = new HashMap<>();
     private Aggregation aggregation;
     private Aggregation filteredCountAggregation;
+    private final Class<T> classType;
 
-    DataTablesRefCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria) {
+    DataTablesRefCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria, Class<T> classType) {
+        this.classType = classType;
 
         List<AggregationOperation> aggregationOperations = new ArrayList<>();
 
@@ -72,19 +75,22 @@ final class DataTablesRefCriteria {
 
                 // Convert reference field array of key-value objects
                 ProjectionOperation projectDbRefArr = Aggregation
-                        .project(columnStringsArr)
+                        .project(getFields())
+                        .andInclude(columnStringsArr)
                         .and(ObjectOperators.ObjectToArray.valueOfToArray(c.getData()))
                         .as(resolvedReferenceColumn + "_fk_arr");
 
                 // Extract object with Id from array
                 ProjectionOperation projectDbRefObject = Aggregation
-                        .project(columnStringsArr)
+                        .project(getFields())
+                        .andInclude(columnStringsArr)
                         .and( resolvedReferenceColumn + "_fk_arr").arrayElementAt(1)
                         .as(resolvedReferenceColumn + "_fk_obj");
 
                 // Get value field from key-value object
                 ProjectionOperation projectPidField = Aggregation
-                        .project(columnStringsArr)
+                        .project(getFields())
+                        .andInclude(columnStringsArr)
                         .and(resolvedReferenceColumn + "_fk_obj.v").as(resolvedReferenceColumn + "_id");
 
                 // Lookup object with id in reference collection and save it in document
@@ -236,5 +242,21 @@ final class DataTablesRefCriteria {
 
     public Aggregation toFilteredCountAggregation() {
         return filteredCountAggregation;
+    }
+
+    private Fields getFields() {
+        return Fields.fields(Arrays.stream(BeanUtils.getPropertyDescriptors(classType))
+                .filter(it -> {
+                    Method method = it.getReadMethod();
+                    if (method == null) {
+                        return false;
+                    }
+                    if (ReflectionUtils.isObjectMethod(method)) {
+                        return false;
+                    }
+                    return !method.isDefault();
+                })
+                .map(PropertyDescriptor::getName)
+                .toArray(String[]::new));
     }
 }

@@ -1,10 +1,8 @@
 package org.springframework.data.mongodb.datatables;
 
-import com.mongodb.DBObject;
 import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -76,7 +74,7 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
                     return output;
                 }
 
-                DataTablesRefCriteria refCriteria = new DataTablesRefCriteria(input, additionalCriteria, preFilteringCriteria);
+                DataTablesRefCriteria refCriteria = new DataTablesRefCriteria(input, additionalCriteria, preFilteringCriteria, metadata.getJavaType());
 
                 AggregationResults<Document> result = mongoOperations.aggregate(refCriteria.toFilteredCountAggregation(), metadata.getCollectionName(), Document.class);
 
