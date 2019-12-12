@@ -23,7 +23,12 @@ final class DataTablesRefCriteria {
 
     DataTablesRefCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria) {
 
-        List<AggregationOperation> aggregationOperations = addReferenceResolver(input);
+        List<AggregationOperation> aggregationOperations = new ArrayList<>();
+
+        if (additionalCriteria != null) aggregationOperations.add(Aggregation.match(additionalCriteria));
+        if (preFilteringCriteria != null) aggregationOperations.add(Aggregation.match(preFilteringCriteria));
+
+        aggregationOperations.addAll(addReferenceResolver(input));
 
         AggregationOperation globalMatching = addGlobalCriteria(input);
 
@@ -37,9 +42,6 @@ final class DataTablesRefCriteria {
                 aggregationOperations.add(columnCriteriaMatcher);
             }
         });
-
-        if (additionalCriteria != null) aggregationOperations.add(Aggregation.match(additionalCriteria));
-        if (preFilteringCriteria != null) aggregationOperations.add(Aggregation.match(preFilteringCriteria));
 
         List<AggregationOperation> filteredCountOperations = new ArrayList<>(aggregationOperations);
         filteredCountOperations.add(Aggregation.count().as("filtered_count"));
@@ -173,20 +175,22 @@ final class DataTablesRefCriteria {
     private List<AggregationOperation> addSort(DataTablesInput input) {
         List<AggregationOperation> operations = new ArrayList<>();
 
+        if (!isEmpty(input.getOrder())) {
+
+            List<Sort.Order> orders = input.getOrder().stream()
+                    .filter(order -> isOrderable(input, order))
+                    .map(order -> toOrder(input, order)).collect(toList());
+
+            if (orders.size() != 0) {
+                operations.add(Aggregation.sort(by(orders)));
+            }
+
+        }
+
         operations.add(Aggregation.skip(input.getStart()));
 
         if (input.getLength() >= 0) {
             operations.add(Aggregation.limit(input.getLength()));
-        }
-
-        if (isEmpty(input.getOrder())) return operations;
-
-        List<Sort.Order> orders = input.getOrder().stream()
-                .filter(order -> isOrderable(input, order))
-                .map(order -> toOrder(input, order)).collect(toList());
-
-        if (orders.size() != 0) {
-            operations.add(Aggregation.sort(by(orders)));
         }
 
         return operations;
