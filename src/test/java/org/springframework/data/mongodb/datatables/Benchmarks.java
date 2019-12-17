@@ -1,10 +1,9 @@
 package org.springframework.data.mongodb.datatables;
 
-import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.openjdk.jmh.annotations.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
@@ -14,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.data.mongodb.core.query.Criteria.where;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(classes = TestConfiguration.class)
@@ -35,7 +35,7 @@ public class Benchmarks extends BenchmarkRunner {
     @Benchmark
     public void globalFilterRef() {
         DataTablesInput input = getDefaultInputRef();
-        input.setSearch(new DataTablesInput.Search(" ORDer2  ", false));
+        input.setSearch(new DataTablesInput.Search(" ORDer 22  ", false));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order2);
@@ -44,10 +44,32 @@ public class Benchmarks extends BenchmarkRunner {
     @Benchmark
     public void globalFilter() {
         DataTablesInput input = getDefaultInput();
-        input.setSearch(new DataTablesInput.Search(" ORDer2  ", false));
+        input.setSearch(new DataTablesInput.Search(" ORDer 22  ", false));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order2);
+    }
+
+    @Benchmark
+    public void globalFilter_additionalCriteria() {
+        Criteria criteria = where("isEnabled").ne(true);
+
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search(" ORDer 2  ", false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input, criteria);
+        assertThat(output.getData().size()).isEqualTo(6);
+    }
+
+    @Benchmark
+    public void globalFilterRef_additionalCriteria() {
+        Criteria criteria = where("isEnabled").ne(true);
+
+        DataTablesInput input = getDefaultInputRef();
+        input.setSearch(new DataTablesInput.Search(" ORDer 2  ", false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input, criteria);
+        assertThat(output.getData().size()).isEqualTo(6);
     }
 
     private DataTablesInput getDefaultInput() {

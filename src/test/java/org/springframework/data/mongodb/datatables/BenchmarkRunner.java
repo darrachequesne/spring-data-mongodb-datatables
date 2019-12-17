@@ -7,15 +7,17 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
 public abstract class BenchmarkRunner {
 
     protected static ProductRepository productRepository;
 
     protected static OrderRepository orderRepository;
 
-    protected static Order order1;
     protected static Order order2;
-    protected static Order order3;
 
     @Test
     public void executeJmhRunner() throws RunnerException {
@@ -44,16 +46,33 @@ public abstract class BenchmarkRunner {
         productRepository.deleteAll();
         orderRepository.deleteAll();
 
-        productRepository.save(Product.PRODUCT1);
-        productRepository.save(Product.PRODUCT2);
-        productRepository.save(Product.PRODUCT3);
+        List<Product> products = new ArrayList<>();
 
-        order1 = Order.ORDER1(Product.PRODUCT1);
-        order2 = Order.ORDER2(Product.PRODUCT2);
-        order3 = Order.ORDER3(Product.PRODUCT3);
+        for (int i = 1; i <= 100; i++) {
+            products.add(Product.builder()
+                    .id(i)
+                    .label("Product " + i)
+                    .isEnabled(i % 2 == 0)
+                    .createdAt(LocalDateTime.now())
+                    .build());
+        }
 
-        orderRepository.save(order1);
-        orderRepository.save(order2);
-        orderRepository.save(order3);
+        productRepository.saveAll(products);
+
+        List<Order> orders = new ArrayList<>();
+
+        for (int i = 1; i <= 100; i++) {
+            orders.add(Order.builder()
+                    .id(i)
+                    .label("Order " + i)
+                    .isEnabled(i % 2 == 1)
+                    .createdAt(LocalDateTime.now())
+                    .product(products.get(i - 1))
+                    .build());
+        }
+
+        orderRepository.saveAll(orders);
+
+        order2 = orders.get(21);
     }
 }

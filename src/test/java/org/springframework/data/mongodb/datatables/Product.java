@@ -40,6 +40,14 @@ class Product {
             .characteristic(new Characteristic("key2", "val23"))
             .build();
 
+    static Product PRODUCT4 = Product.builder()
+            .id(4)
+            .label("product4")
+            .isEnabled(false)
+            .createdAt(truncateToMillis(LocalDateTime.now().plusHours(2)))
+            .characteristic(new Characteristic("key2", "val23"))
+            .build();
+
     /**
      * Since JDK 9, LocalDateTime uses a precision of nanoseconds, while the BSON dates in MongoDB have a millisecond
      * precision, so we have to truncate it in order not to lose information.

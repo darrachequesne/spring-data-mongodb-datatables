@@ -50,6 +50,18 @@ public class Order {
                 .build();
     }
 
+    static Order ORDER4(Product product, User user) {
+        return Order.builder()
+                .id(4)
+                .label("order4")
+                .isEnabled(false)
+                .createdAt(truncateToMillis(LocalDateTime.now().minusHours(2)))
+                .product(product)
+                .user(user)
+                .characteristic(new Product.Characteristic("key3", "val24"))
+                .build();
+    }
+
     /**
      * Since JDK 9, LocalDateTime uses a precision of nanoseconds, while the BSON dates in MongoDB have a millisecond
      * precision, so we have to truncate it in order not to lose information.
@@ -75,4 +87,7 @@ public class Order {
 
     @DBRef
     private Product product;
+
+    @DBRef
+    private User user;
 }

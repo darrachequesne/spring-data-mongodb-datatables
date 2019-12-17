@@ -244,6 +244,11 @@ final class DataTablesRefCriteria<T> {
         return filteredCountAggregation;
     }
 
+    /**
+     * Use official getFields method to list all fields of the class.
+     * Source: https://github.com/spring-projects/spring-data-mongodb/blob/1a5de2e1db939f7b35579f11815894fd637fc227/spring-data-mongodb/src/main/java/org/springframework/data/mongodb/core/aggregation/AggregationOperationContext.java#L88
+     * @return Class fields
+     */
     private Fields getFields() {
         return Fields.fields(Arrays.stream(BeanUtils.getPropertyDescriptors(classType))
                 .filter(it -> {

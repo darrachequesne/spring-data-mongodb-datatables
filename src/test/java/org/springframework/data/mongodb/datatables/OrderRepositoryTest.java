@@ -32,11 +32,12 @@ public class OrderRepositoryTest {
     private OrderRepository orderRepository;
 
     @Autowired
-    private MongoOperations mongoOperations;
+    private UserRepository userRepository;
 
     private Order order1;
     private Order order2;
     private Order order3;
+    private Order order4;
 
     @Before
     public void init() {
@@ -46,14 +47,19 @@ public class OrderRepositoryTest {
         productRepository.save(Product.PRODUCT1);
         productRepository.save(Product.PRODUCT2);
         productRepository.save(Product.PRODUCT3);
+        productRepository.save(Product.PRODUCT4);
+
+        userRepository.save(User.USER1);
 
         order1 = Order.ORDER1(Product.PRODUCT1);
         order2 = Order.ORDER2(Product.PRODUCT2);
         order3 = Order.ORDER3(Product.PRODUCT3);
+        order4 = Order.ORDER4(Product.PRODUCT4, User.USER1);
 
         orderRepository.save(order1);
         orderRepository.save(order2);
         orderRepository.save(order3);
+        orderRepository.save(order4);
     }
 
     private DataTablesInput getDefaultInput() {
@@ -64,6 +70,10 @@ public class OrderRepositoryTest {
         productRefColumns.add("isEnabled");
         productRefColumns.add("createdAt");
 
+        List<String> userRefColumns = new ArrayList<>();
+        userRefColumns.add("firstName");
+        userRefColumns.add("lastName");
+
         input.setColumns(asList(
                 createColumn("id", true, true),
                 createColumn("label", true, true),
@@ -71,7 +81,8 @@ public class OrderRepositoryTest {
                 createColumn("createdAt", true, true),
                 createColumn("characteristics.key", true, true),
                 createColumn("characteristics.value", true, true),
-                createRefColumn("product", true, true, "product", productRefColumns, "createdAt")
+                createRefColumn("product", true, true, "product", productRefColumns, "createdAt"),
+                createRefColumn("user", true, true, "user", userRefColumns, "firstName")
         ));
         input.setSearch(new DataTablesInput.Search("", false));
         return input;
@@ -106,16 +117,17 @@ public class OrderRepositoryTest {
         DataTablesOutput<Order> output = orderRepository.findAll(input);
 
         assertThat(output.getData()).containsOnly(order3);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
     public void basic() {
         DataTablesOutput<Order> output = orderRepository.findAll(getDefaultInput());
         assertThat(output.getDraw()).isEqualTo(1);
+        assertThat(output.getRecordsFiltered()).isEqualTo(4);
+        assertThat(output.getRecordsTotal()).isEqualTo(4);
+        assertThat(output.getData()).containsOnly(order1, order2, order3, order4);
         assertThat(output.getError()).isNull();
-        assertThat(output.getRecordsFiltered()).isEqualTo(3);
-        assertThat(output.getRecordsTotal()).isEqualTo(3);
-        assertThat(output.getData()).containsOnly(order1, order2, order3);
     }
 
     @Test
@@ -127,10 +139,10 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getDraw()).isEqualTo(2);
-        assertThat(output.getError()).isNull();
-        assertThat(output.getRecordsFiltered()).isEqualTo(3);
-        assertThat(output.getRecordsTotal()).isEqualTo(3);
+        assertThat(output.getRecordsFiltered()).isEqualTo(4);
+        assertThat(output.getRecordsTotal()).isEqualTo(4);
         assertThat(output.getData()).containsOnly(order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -140,6 +152,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsSequence(order3, order1, order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -149,6 +162,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsSequence(order2, order1, order3);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -158,6 +172,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -177,6 +192,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -187,6 +203,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order3);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -197,6 +214,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order3);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -207,6 +225,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order1, order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -217,6 +236,7 @@ public class OrderRepositoryTest {
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getRecordsFiltered()).isEqualTo(0);
         assertThat(output.getData()).hasSize(0);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -225,9 +245,10 @@ public class OrderRepositoryTest {
         input.setLength(-1);
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getRecordsFiltered()).isEqualTo(3);
-        assertThat(output.getRecordsTotal()).isEqualTo(3);
-        assertThat(output.getData()).hasSize(3);
+        assertThat(output.getRecordsFiltered()).isEqualTo(4);
+        assertThat(output.getRecordsTotal()).isEqualTo(4);
+        assertThat(output.getData()).hasSize(4);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -238,13 +259,14 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order1, order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
     public void converter() {
         DataTablesOutput<String> output = orderRepository.findAll(getDefaultInput(), Order::getLabel);
-
-        assertThat(output.getData()).containsOnly("order1", "order2", "order3");
+        assertThat(output.getData()).containsOnly("order1", "order2", "order3", "order4");
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -253,8 +275,9 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(getDefaultInput(), criteria);
         assertThat(output.getRecordsFiltered()).isEqualTo(2);
-        assertThat(output.getRecordsTotal()).isEqualTo(3);
+        assertThat(output.getRecordsTotal()).isEqualTo(4);
         assertThat(output.getData()).containsOnly(order1, order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -265,6 +288,7 @@ public class OrderRepositoryTest {
         assertThat(output.getRecordsFiltered()).isEqualTo(2);
         assertThat(output.getRecordsTotal()).isEqualTo(2);
         assertThat(output.getData()).containsOnly(order2, order3);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -276,7 +300,8 @@ public class OrderRepositoryTest {
         });
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsOnly(order1, order2, order3);
+        assertThat(output.getData()).containsOnly(order1, order2, order3, order4);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -288,6 +313,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsSequence(order1, order2, order3);
+        assertThat(output.getError()).isNull();
     }
 
     /**
@@ -299,7 +325,8 @@ public class OrderRepositoryTest {
         input.setOrder(singletonList(new DataTablesInput.Order(6, DataTablesInput.Order.Direction.asc)));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsSequence(order3, order1, order2);
+        assertThat(output.getData()).containsSequence(order3, order1, order2, order4);
+        assertThat(output.getError()).isNull();
     }
 
     /**
@@ -311,7 +338,39 @@ public class OrderRepositoryTest {
         input.setOrder(singletonList(new DataTablesInput.Order(6, DataTablesInput.Order.Direction.desc)));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsSequence(order2, order1, order3);
+        assertThat(output.getData()).containsSequence(order4, order2, order1, order3);
+    }
+
+    @Test
+    public void ref_paginated_sortDescending() {
+        DataTablesInput input = getDefaultInput();
+        input.setOrder(singletonList(new DataTablesInput.Order(6, DataTablesInput.Order.Direction.desc)));
+        input.setDraw(2);
+        input.setLength(1);
+        input.setStart(2);
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getDraw()).isEqualTo(2);
+        assertThat(output.getError()).isNull();
+        assertThat(output.getRecordsFiltered()).isEqualTo(4);
+        assertThat(output.getRecordsTotal()).isEqualTo(4);
+        assertThat(output.getData()).containsOnly(order1);
+    }
+
+    @Test
+    public void ref_paginated_sortAscending() {
+        DataTablesInput input = getDefaultInput();
+        input.setOrder(singletonList(new DataTablesInput.Order(6, DataTablesInput.Order.Direction.asc)));
+        input.setDraw(2);
+        input.setLength(1);
+        input.setStart(2);
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getDraw()).isEqualTo(2);
+        assertThat(output.getError()).isNull();
+        assertThat(output.getRecordsFiltered()).isEqualTo(4);
+        assertThat(output.getRecordsTotal()).isEqualTo(4);
+        assertThat(output.getData()).containsOnly(order2);
     }
 
     @Test
@@ -321,6 +380,27 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order2);
+        assertThat(output.getError()).isNull();
+    }
+
+    @Test
+    public void ref_globalFilter_user() {
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search("FName", false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order4);
+        assertThat(output.getError()).isNull();
+    }
+
+    @Test
+    public void ref_globalFilter_product4() {
+        DataTablesInput input = getDefaultInput();
+        input.setSearch(new DataTablesInput.Search("product4", false));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsOnly(order4);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -330,6 +410,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order2);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -339,6 +420,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order2);
+        assertThat(output.getError()).isNull();
     }
 
     /**
@@ -352,6 +434,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order3);
+        assertThat(output.getError()).isNull();
     }
 
     /**
@@ -365,6 +448,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order3);
+        assertThat(output.getError()).isNull();
     }
 
     /**
@@ -378,6 +462,7 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order1, order2);
+        assertThat(output.getError()).isNull();
     }
 
     /**
@@ -390,14 +475,16 @@ public class OrderRepositoryTest {
                 column.setSearch(new DataTablesInput.Search("true", false)));
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData().size()).isEqualTo(3);
+        assertThat(output.getData().size()).isEqualTo(4);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
     public void ref_converter() {
         DataTablesOutput<Product> output = orderRepository.findAll(getDefaultInput(), Order::getProduct);
 
-        assertThat(output.getData()).containsOnly(Product.PRODUCT1, Product.PRODUCT2, Product.PRODUCT3);
+        assertThat(output.getData()).containsOnly(Product.PRODUCT1, Product.PRODUCT2, Product.PRODUCT3, Product.PRODUCT4);
+        assertThat(output.getError()).isNull();
     }
 
     /**
@@ -431,7 +518,8 @@ public class OrderRepositoryTest {
         });
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
-        assertThat(output.getData()).containsOnly(order1, order2, order3);
+        assertThat(output.getData()).containsOnly(order1, order2, order3, order4);
+        assertThat(output.getError()).isNull();
     }
 
     @Test
@@ -443,5 +531,6 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsSequence(order1, order2, order3);
+        assertThat(output.getError()).isNull();
     }
 }
