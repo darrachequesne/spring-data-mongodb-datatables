@@ -23,18 +23,14 @@ public abstract class BenchmarkRunner {
     public void executeJmhRunner() throws RunnerException {
         createTestData();
         Options opt = new OptionsBuilder()
-                // set the class name regex for benchmarks to search for to the current class
                 .include("\\." + this.getClass().getSimpleName() + "\\.")
                 .warmupIterations(5)
                 .measurementIterations(10)
-                // do not use forking or the benchmark methods will not see references stored within its class
                 .forks(0)
-                // do not use multiple threads
                 .threads(1)
                 .shouldDoGC(true)
                 .shouldFailOnError(true)
                 .resultFormat(ResultFormatType.JSON)
-                //.result("report.txt") // set this to a valid filename if you want reports
                 .shouldFailOnError(true)
                 .jvmArgs("-server")
                 .build();

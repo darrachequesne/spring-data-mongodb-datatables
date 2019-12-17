@@ -5,7 +5,7 @@
         </encoder>
     </appender>
 
-    <logger name="org.springframework.data.mongodb" level="ERROR" />
+    <logger name="org.springframework.data.mongodb" level="DEBUG" />
 
     <root level="WARN">
         <appender-ref ref="STDOUT" />

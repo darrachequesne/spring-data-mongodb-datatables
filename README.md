@@ -348,7 +348,7 @@ Searching documents referenced with @DBRef is supported but needs manual configu
 
 **Example**:
 
-User has DBRef Location:
+The User has a location field with @DBRef
 ```java
 @Entity
 public class User {
@@ -382,19 +382,19 @@ The location configuration has to be added in the controller:
 public DataTablesOutput<User> getUsers(@Valid @RequestBody DataTablesInput input) {
 
   input.getColumns().stream().forEach(column -> {
-              if (column.getData().equals("location")) {
-                  column.setReference(true); // enables reference resolution for this column
-                  column.setReferenceOrderColumn("city"); // field by which this column will be ordered
-                  column.setReferenceCollection("location"); // the exact collection name where locations are stored in the database
-  
-                  // list all columns that should be searched
-                  List<String> locationSearchColumns = new ArrayList<>();
-                  locationSearchColumns.add("street");
-                  locationSearchColumns.add("description");
-                  locationSearchColumns.add("city");
-                  column.setReferenceColumns(locationSearchColumns);
-              }
-          });
+      if (column.getData().equals("location")) {
+          column.setReference(true); // enables reference resolution for this column
+          column.setReferenceOrderColumn("city"); // field by which this column will be ordered
+          column.setReferenceCollection("location"); // the exact collection name where locations are stored in the database
+
+          // list all columns that should be searched
+          List<String> locationSearchColumns = new ArrayList<>();
+          locationSearchColumns.add("street");
+          locationSearchColumns.add("description");
+          locationSearchColumns.add("city");
+          column.setReferenceColumns(locationSearchColumns);
+      }
+  });
 
   return userRepository.findAll(input);
 }
