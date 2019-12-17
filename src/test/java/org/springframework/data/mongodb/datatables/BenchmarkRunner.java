@@ -26,7 +26,7 @@ public abstract class BenchmarkRunner {
                 // set the class name regex for benchmarks to search for to the current class
                 .include("\\." + this.getClass().getSimpleName() + "\\.")
                 .warmupIterations(5)
-                .measurementIterations(50)
+                .measurementIterations(10)
                 // do not use forking or the benchmark methods will not see references stored within its class
                 .forks(0)
                 // do not use multiple threads

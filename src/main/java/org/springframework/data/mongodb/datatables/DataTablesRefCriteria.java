@@ -1,6 +1,7 @@
 package org.springframework.data.mongodb.datatables;
 
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.annotation.Id;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -21,10 +22,23 @@ final class DataTablesRefCriteria<T> {
     private Map<String, String> resolvedColumn = new HashMap<>();
     private Aggregation aggregation;
     private Aggregation filteredCountAggregation;
-    private final Class<T> classType;
+
+    private Fields allClassFields;
+    private String originalIdField;
 
     DataTablesRefCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria, Class<T> classType) {
-        this.classType = classType;
+        // fill column map
+        input.setColumns(input.getColumns());
+
+        allClassFields = getFields(classType);
+        setDeclaredIdField(classType);
+
+        if (!StringUtils.isEmpty(originalIdField)) {
+            input.getColumn(originalIdField).ifPresent(c -> {
+                c.setData("_id");
+                input.setColumns(input.getColumns());
+            });
+        }
 
         List<AggregationOperation> aggregationOperations = new ArrayList<>();
 
@@ -53,6 +67,13 @@ final class DataTablesRefCriteria<T> {
 
         aggregationOperations.addAll(addSort(input));
         aggregation = Aggregation.newAggregation(aggregationOperations);
+
+        if (!StringUtils.isEmpty(originalIdField)) {
+            input.getColumn("_id").ifPresent(c -> {
+                c.setData(originalIdField);
+                input.setColumns(input.getColumns());
+            });
+        }
     }
 
     private List<AggregationOperation> addReferenceResolver(DataTablesInput input) {
@@ -75,21 +96,21 @@ final class DataTablesRefCriteria<T> {
 
                 // Convert reference field array of key-value objects
                 ProjectionOperation projectDbRefArr = Aggregation
-                        .project(getFields())
+                        .project(allClassFields)
                         .andInclude(columnStringsArr)
                         .and(ObjectOperators.ObjectToArray.valueOfToArray(c.getData()))
                         .as(resolvedReferenceColumn + "_fk_arr");
 
                 // Extract object with Id from array
                 ProjectionOperation projectDbRefObject = Aggregation
-                        .project(getFields())
+                        .project(allClassFields)
                         .andInclude(columnStringsArr)
                         .and( resolvedReferenceColumn + "_fk_arr").arrayElementAt(1)
                         .as(resolvedReferenceColumn + "_fk_obj");
 
                 // Get value field from key-value object
                 ProjectionOperation projectPidField = Aggregation
-                        .project(getFields())
+                        .project(allClassFields)
                         .andInclude(columnStringsArr)
                         .and(resolvedReferenceColumn + "_fk_obj.v").as(resolvedReferenceColumn + "_id");
 
@@ -115,8 +136,8 @@ final class DataTablesRefCriteria<T> {
 
         Criteria[] criteriaArray = input.getColumns().stream()
                 .filter(DataTablesInput.Column::isSearchable)
-                .map(column -> createCriteriaRefSupport(column, input.getSearch()))
-                .flatMap(criteriaList -> criteriaList.stream())
+                .map(column -> createCriteria(column, input.getSearch()))
+                .flatMap(Collection::stream)
                 .toArray(Criteria[]::new);
 
         if (criteriaArray.length == 1) {
@@ -130,7 +151,7 @@ final class DataTablesRefCriteria<T> {
 
     private MatchOperation addColumnCriteria(DataTablesInput.Column column) {
         if (column.isSearchable() && hasText(column.getSearch().getValue())) {
-            List<Criteria> criteria = createCriteriaRefSupport(column, column.getSearch());
+            List<Criteria> criteria = createCriteria(column, column.getSearch());
             if (criteria.size() == 1) {
                 return Aggregation.match(criteria.get(0));
             } else if (criteria.size() >= 2) {
@@ -141,7 +162,7 @@ final class DataTablesRefCriteria<T> {
         return null;
     }
 
-    private List<Criteria> createCriteriaRefSupport(DataTablesInput.Column column, DataTablesInput.Search search) {
+    private List<Criteria> createCriteria(DataTablesInput.Column column, DataTablesInput.Search search) {
 
         String searchValue = search.getValue();
         boolean isBooleanSearch = "true".equalsIgnoreCase(searchValue) || "false".equalsIgnoreCase(searchValue);
@@ -150,7 +171,7 @@ final class DataTablesRefCriteria<T> {
         if (column.isReference()) {
 
             if (isBooleanSearch) {
-                boolean booleanSearchValue = Boolean.valueOf(searchValue);
+                boolean booleanSearchValue = Boolean.parseBoolean(searchValue);
 
                 return column.getReferenceColumns().stream()
                         .map(data -> where(resolvedColumn.get(column.getData()) + "." + data).is(booleanSearchValue))
@@ -207,7 +228,7 @@ final class DataTablesRefCriteria<T> {
 
         DataTablesInput.Column column = input.getColumns().get(order.getColumn());
         return isWithinBounds && column.isOrderable()
-                && (!column.isReference() || (column.isReference() && !StringUtils.isEmpty(column.getReferenceOrderColumn())));
+                && (!column.isReference() || !StringUtils.isEmpty(column.getReferenceOrderColumn()));
     }
 
     private Sort.Order toOrder(DataTablesInput input, DataTablesInput.Order order) {
@@ -217,7 +238,6 @@ final class DataTablesRefCriteria<T> {
         if (column.isReference()) {
             return new Sort.Order(sortDir, resolvedColumn.get(column.getData()) + "." + column.getReferenceOrderColumn());
         }
-
 
         return new Sort.Order(sortDir, column.getData());
     }
@@ -249,8 +269,9 @@ final class DataTablesRefCriteria<T> {
      * Source: https://github.com/spring-projects/spring-data-mongodb/blob/1a5de2e1db939f7b35579f11815894fd637fc227/spring-data-mongodb/src/main/java/org/springframework/data/mongodb/core/aggregation/AggregationOperationContext.java#L88
      * @return Class fields
      */
-    private Fields getFields() {
-        return Fields.fields(Arrays.stream(BeanUtils.getPropertyDescriptors(classType))
+    private Fields getFields(Class<T> type) {
+
+        return Fields.fields(Arrays.stream(BeanUtils.getPropertyDescriptors(type))
                 .filter(it -> {
                     Method method = it.getReadMethod();
                     if (method == null) {
@@ -263,5 +284,11 @@ final class DataTablesRefCriteria<T> {
                 })
                 .map(PropertyDescriptor::getName)
                 .toArray(String[]::new));
+    }
+
+    private void setDeclaredIdField(Class<T> classType) {
+        Optional<java.lang.reflect.Field> idField = Arrays.stream(classType.getDeclaredFields())
+                .filter(f -> f.isAnnotationPresent(Id.class)).findFirst();
+        idField.ifPresent(f -> originalIdField = idField.get().getName());
     }
 }

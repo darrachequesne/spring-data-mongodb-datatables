@@ -1,6 +1,7 @@
 package org.springframework.data.mongodb.datatables;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -166,6 +167,26 @@ public class OrderRepositoryTest {
     }
 
     @Test
+    public void sortAscending_primaryKey() {
+        DataTablesInput input = getDefaultInput();
+        input.setOrder(singletonList(new DataTablesInput.Order(0, DataTablesInput.Order.Direction.asc)));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsSequence(order1, order2, order3, order4);
+        assertThat(output.getError()).isNull();
+    }
+
+    @Test
+    public void sortDescending_primaryKey() {
+        DataTablesInput input = getDefaultInput();
+        input.setOrder(singletonList(new DataTablesInput.Order(0, DataTablesInput.Order.Direction.desc)));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).containsSequence(order4, order3, order2, order1);
+        assertThat(output.getError()).isNull();
+    }
+
+    @Test
     public void globalFilter() {
         DataTablesInput input = getDefaultInput();
         input.setSearch(new DataTablesInput.Search(" ORDer2  ", false));
@@ -203,6 +224,20 @@ public class OrderRepositoryTest {
 
         DataTablesOutput<Order> output = orderRepository.findAll(input);
         assertThat(output.getData()).containsOnly(order3);
+        assertThat(output.getError()).isNull();
+    }
+
+    /**
+     * Integer search is currently not supported in reference and in non-reference tables
+     */
+    @Test
+    public void columnFilter_int() {
+        DataTablesInput input = getDefaultInput();
+        input.getColumn("id").ifPresent(column ->
+                column.setSearch(new DataTablesInput.Search("2", false)));
+
+        DataTablesOutput<Order> output = orderRepository.findAll(input);
+        assertThat(output.getData()).isEmpty();
         assertThat(output.getError()).isNull();
     }
 

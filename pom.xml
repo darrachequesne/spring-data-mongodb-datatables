@@ -5,11 +5,11 @@
 
     <groupId>com.github.netfarmers</groupId>
     <artifactId>spring-data-mongodb-datatables</artifactId>
-    <version>1.2</version>
+    <version>1.2.1.1</version>
 
     <name>Spring Data MongoDB for DataTables</name>
     <description>Spring Data MongoDB extension to work with the great jQuery plug-in DataTables (http://datatables.net/)</description>
-    <url>https://github.com/darrachequesne/spring-data-mongodb-datatables</url>
+    <url>https://github.com/Netfarmers/spring-data-mongodb-datatables</url>
 
     <licenses>
         <license>

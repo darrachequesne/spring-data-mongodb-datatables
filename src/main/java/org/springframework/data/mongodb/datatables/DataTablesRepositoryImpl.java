@@ -63,7 +63,7 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
         }
 
         try {
-            if (input.getColumns().stream().anyMatch(c -> c.isReference())) {
+            if (input.getColumns().stream().anyMatch(DataTablesInput.Column::isReference)) {
                 if (containsReferenceColumn(input, preFilteringCriteria) || containsReferenceColumn(input, additionalCriteria)) {
                     throw new IllegalArgumentException("Additional criteria and prefilter criteria cannot use a reference column.");
                 }
