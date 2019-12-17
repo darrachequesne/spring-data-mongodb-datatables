@@ -40,6 +40,7 @@ public class UserRestController {
 - [API](#api)
 - [How to](#how-to)
   - [Apply filters](#apply-filters)
+  - [Reference column filters](#reference-column-filters)
   - [Manage non-searchable fields](#manage-non-searchable-fields)
   - [Limit the exposed attributes of the entities](#limit-the-exposed-attributes-of-the-entities)
 - [Troubleshooting](#troubleshooting)
@@ -340,6 +341,66 @@ FROM users user0_
 WHERE (user0_.id LIKE "%john%" OR user0_.first_name LIKE "%john%" OR user0_.last_name LIKE "%john%")
 ORDER BY user0_.id ASC LIMIT 10
 ```
+
+### Reference column filters
+
+Searching documents referenced with @DBRef is supported but needs manual configuration.
+
+**Example**:
+
+User has DBRef Location:
+```java
+@Entity
+public class User {
+
+  private Integer id;
+
+  private String mail;
+
+  @DBRef
+  private Location location;
+}
+```
+
+```java
+@Entity
+public class Location {
+
+  private Integer id;
+
+  private String street;
+
+  private String description;
+
+  private String city;
+}
+```
+
+The location configuration has to be added in the controller:
+```java
+@RequestMapping(value = "/data/users", method = RequestMethod.POST)
+public DataTablesOutput<User> getUsers(@Valid @RequestBody DataTablesInput input) {
+
+  input.getColumns().stream().forEach(column -> {
+              if (column.getData().equals("location")) {
+                  column.setReference(true); // enables reference resolution for this column
+                  column.setReferenceOrderColumn("city"); // field by which this column will be ordered
+                  column.setReferenceCollection("location"); // the exact collection name where locations are stored in the database
+  
+                  // list all columns that should be searched
+                  List<String> locationSearchColumns = new ArrayList<>();
+                  locationSearchColumns.add("street");
+                  locationSearchColumns.add("description");
+                  locationSearchColumns.add("city");
+                  column.setReferenceColumns(locationSearchColumns);
+              }
+          });
+
+  return userRepository.findAll(input);
+}
+```
+
+A complete example project is available [here](https://github.com/Netfarmers/spring-data-mongodb-datatables-examples).
 
 ### Manage non-searchable fields
 
