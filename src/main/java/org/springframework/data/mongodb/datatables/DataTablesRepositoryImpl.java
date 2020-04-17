@@ -67,8 +67,11 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
                 return output;
             }
 
-            Query query = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria).toQuery();
-            long recordsFiltered = mongoOperations.count(query, metadata.getCollectionName());
+            DataTablesCriteria criteria = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria);
+            Query query = criteria.toQuery();
+            Query queryWithoutLimit = criteria.toQueryWithoutLimit();
+
+            long recordsFiltered = mongoOperations.count(queryWithoutLimit, metadata.getCollectionName());
             output.setRecordsFiltered(recordsFiltered);
             if (recordsFiltered == 0) {
                 return output;
