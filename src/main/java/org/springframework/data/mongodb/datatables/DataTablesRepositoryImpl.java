@@ -3,7 +3,6 @@ package org.springframework.data.mongodb.datatables;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.repository.query.MongoEntityInformation;
 import org.springframework.data.mongodb.repository.support.SimpleMongoRepository;
 
@@ -67,14 +66,15 @@ final class DataTablesRepositoryImpl<T, ID extends Serializable> extends SimpleM
                 return output;
             }
 
-            Query query = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria).toQuery();
-            long recordsFiltered = mongoOperations.count(query, metadata.getCollectionName());
+            DataTablesCriteria criteria = new DataTablesCriteria(input, additionalCriteria, preFilteringCriteria);
+
+            long recordsFiltered = mongoOperations.count(criteria.toCountQuery(), metadata.getCollectionName());
             output.setRecordsFiltered(recordsFiltered);
             if (recordsFiltered == 0) {
                 return output;
             }
 
-            List<T> data = mongoOperations.find(query, metadata.getJavaType(), metadata.getCollectionName());
+            List<T> data = mongoOperations.find(criteria.toQuery(), metadata.getJavaType(), metadata.getCollectionName());
             output.setData(converter == null ? (List<R>) data : data.stream().map(converter).collect(toList()));
 
         } catch (Exception e) {

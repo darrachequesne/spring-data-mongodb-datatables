@@ -13,21 +13,40 @@ import static org.springframework.util.ObjectUtils.isEmpty;
 import static org.springframework.util.StringUtils.hasText;
 
 final class DataTablesCriteria {
-    private final Query query = new Query();
+
+    private final DataTablesInput input;
+    private final Criteria additionalCriteria;
+    private final Criteria preFilteringCriteria;
 
     DataTablesCriteria(DataTablesInput input, Criteria additionalCriteria, Criteria preFilteringCriteria) {
-        addGlobalCriteria(input);
-        input.getColumns().forEach(this::addColumnCriteria);
-        addSort(input);
-        if (additionalCriteria != null) query.addCriteria(additionalCriteria);
-        if (preFilteringCriteria != null) query.addCriteria(preFilteringCriteria);
+        this.input = input;
+        this.additionalCriteria = additionalCriteria;
+        this.preFilteringCriteria = preFilteringCriteria;
     }
 
     Query toQuery() {
+        Query query = this.toCountQuery();
+        addSort(query, input);
         return query;
     }
 
-    private void addGlobalCriteria(DataTablesInput input) {
+    Query toCountQuery() {
+        Query query = new Query();
+
+        addGlobalCriteria(query, input);
+        input.getColumns().forEach(column -> this.addColumnCriteria(query, column));
+
+        if (additionalCriteria != null) {
+            query.addCriteria(additionalCriteria);
+        }
+        if (preFilteringCriteria != null) {
+            query.addCriteria(preFilteringCriteria);
+        }
+
+        return query;
+    }
+
+    private void addGlobalCriteria(Query query, DataTablesInput input) {
         if (!hasText(input.getSearch().getValue())) return;
 
         Criteria[] criteriaArray = input.getColumns().stream()
@@ -42,7 +61,7 @@ final class DataTablesCriteria {
         }
     }
 
-    private void addColumnCriteria(DataTablesInput.Column column) {
+    private void addColumnCriteria(Query query, DataTablesInput.Column column) {
         if (column.isSearchable() && hasText(column.getSearch().getValue())) {
             query.addCriteria(createColumnCriteria(column));
         }
@@ -66,7 +85,7 @@ final class DataTablesCriteria {
         }
     }
 
-    private void addSort(DataTablesInput input) {
+    private void addSort(Query query, DataTablesInput input) {
         query.skip(input.getStart());
         query.limit(input.getLength());
 
