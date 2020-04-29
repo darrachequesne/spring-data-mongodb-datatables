@@ -59,7 +59,7 @@ Back to [top](#spring-data-mongodb-datatables).
 
 ## Getting started
 
-Please see the [sample project](https://github.com/darrachequesne/spring-data-jpa-datatables-sample) for a complete example.
+Please see the [sample project](https://github.com/darrachequesne/spring-data-mongodb-datatables-sample) for a complete example.
 
 ### 1. Enable the use of `DataTablesRepository` factory
 
