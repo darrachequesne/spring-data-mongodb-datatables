@@ -1,6 +1,5 @@
 package org.springframework.data.mongodb.datatables;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import javax.validation.constraints.Min;
@@ -8,11 +7,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-
-import static java.util.Optional.ofNullable;
-import static java.util.stream.Collectors.toMap;
 
 @Data
 public class DataTablesInput {
@@ -63,16 +58,10 @@ public class DataTablesInput {
     @NotEmpty
     private List<Column> columns;
 
-    @JsonIgnore
-    private Map<String, Column> columnMap;
-
-    public void setColumns(List<Column> columns) {
-        this.columns = columns;
-        this.columnMap = columns.stream().collect(toMap(Column::getData, x -> x));
-    }
-
     public Optional<Column> getColumn(String columnName) {
-        return ofNullable(columnMap.get(columnName));
+        return this.columns.stream()
+                .filter(column -> columnName.equals(column.getData()))
+                .findFirst();
     }
 
     @Data
