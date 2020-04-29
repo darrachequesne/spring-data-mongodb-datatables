@@ -5,7 +5,7 @@
 
     <groupId>com.github.darrachequesne</groupId>
     <artifactId>spring-data-mongodb-datatables</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 
     <name>Spring Data MongoDB for DataTables</name>
     <description>Spring Data MongoDB extension to work with the great jQuery plug-in DataTables (http://datatables.net/)</description>
